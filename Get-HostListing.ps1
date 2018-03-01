@@ -164,6 +164,7 @@ Function Convert-To-Excel {
         $Connector = $worksheet.QueryTables.add($TxtConnector,$worksheet.Range("A1"))
         $query = $worksheet.QueryTables.item($Connector.name)
 
+
         ### Set the delimiter (, or ;) according to your regional settings
         ### $Excel.Application.International(3) = ,
         ### $Excel.Application.International(5) = ;
