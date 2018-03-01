@@ -109,8 +109,16 @@ Function Get-HostList {
     [CmdletBinding()]
     Param()
     "Retrieving HostList from $Global:VCname"
-    $Global:HostList = Get-VMhost | where {$_.ConnectionState -eq "Connected"} | Get-VMHostHardware | Select VMHost, Manufacturer, Model, SerialNumber
-
+    #$Global:HostList = Get-VMhost | where {$_.ConnectionState -eq "Connected"} | Get-VMHostHardware | Select VMHost, Manufacturer, Model, SerialNumber
+    $Global:HostList = Get-View -ViewType Hostsystem | Select `
+        Name, `
+        @{N="State";E={$_.RunTime.ConnectionState}}, `
+        @{N="Vendor";E={$_.Hardware.systemInfo.Vendor}}, `
+        @{N="Model";e={$_.Hardware.SystemInfo.Model}}, `
+        @{Name="Serial#"; E={($_.Hardware.SystemInfo.OtherIdentifyingInfo | Where {$_.IdentifierType.Key -eq "ServiceTag"}).IdentifierValue}}, `
+        @{N="Product";E={$_.Config.Product.Name}}, `
+        @{N="Version";E={$_.Config.Product.Version}}, `
+        @{N="Build";E={$_.Config.Product.Build}}
 }
 #*************************
 # EndFunction Get-HostList
