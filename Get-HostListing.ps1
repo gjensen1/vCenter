@@ -18,7 +18,8 @@ $ErrorActionPreference="Continue"
 # Define Global Variables
 # -----------------------
 $Global:Folder = $env:USERPROFILE+"\Documents\vCenterHostListings" 
-$Global:HostList = $null
+$Global:MasterList = $null
+$Global:HostList = @()
 $Global:VCName = $null
 $Global:Creds = $null
 
@@ -31,7 +32,7 @@ Function Get-VCenter {
     [CmdletBinding()]
     Param()
     #Prompt User for vCenter
-    Write-Host "Enter the FQHN of the vCenter that the host currently resides in: " -ForegroundColor "Yellow" -NoNewline
+    Write-Host "Enter the FQHN of the vCenter to Get Hosting Listing From: " -ForegroundColor "Yellow" -NoNewline
     $Global:VCName = Read-Host 
 }
 #*******************
@@ -118,11 +119,78 @@ Function Get-HostList {
         @{Name="Serial#"; E={($_.Hardware.SystemInfo.OtherIdentifyingInfo | Where {$_.IdentifierType.Key -eq "ServiceTag"}).IdentifierValue}}, `
         @{N="Product";E={$_.Config.Product.Name}}, `
         @{N="Version";E={$_.Config.Product.Version}}, `
-        @{N="Build";E={$_.Config.Product.Build}}
+        @{N="Build";E={$_.Config.Product.Build}}, `
+        @{N="ManagementIP";E={($_.Config.Network.VNic.Spec | Where {$_.PortGroup -eq "Management Network"}).IP.IPAddress}}, `
+        @{N="Cluster";E={($_.parent | Get-VIObjectByVIView | Select -ExpandProperty Name)}}
+
+
 }
 #*************************
 # EndFunction Get-HostList
 #*************************
+
+#**********************
+# Function Get-HostList2
+#**********************
+Function Get-HostList2 {
+    [CmdletBinding()]
+    Param()
+    "Retrieving HostList from $Global:VCname"
+    "This may take a few minutes"
+    $Count = 1
+    $Global:MasterList = Get-View -ViewType HostSystem 
+    
+    $Global:Masterlist |
+    ForEach-Object {
+        Write-Progress -Id 0 -Activity 'Generating Hostlist' -Status "Processing $($count) of $($Global:MasterList.count)" -CurrentOperation $_.Name -PercentComplete (($count/$Global:MasterList.count) * 100)
+        $Global:HostList += $_ | Select `
+            Name, `
+            @{N="State";E={$_.RunTime.ConnectionState}}, `
+            @{N="Vendor";E={$_.Hardware.systemInfo.Vendor}}, `
+            @{N="Model";e={$_.Hardware.SystemInfo.Model}}, `
+            @{Name="Serial#"; E={($_.Hardware.SystemInfo.OtherIdentifyingInfo | Where {$_.IdentifierType.Key -eq "ServiceTag"}).IdentifierValue}}, `
+            @{N="Product";E={$_.Config.Product.Name}}, `
+            @{N="Version";E={$_.Config.Product.Version}}, `
+            @{N="Build";E={$_.Config.Product.Build}}, `
+            @{N="ManagementIP";E={($_.Config.Network.VNic.Spec | Where {$_.PortGroup -eq "Management Network"}).IP.IPAddress}}, `
+            @{N="Cluster";E={($_.parent | Get-VIObjectByVIView | Select -ExpandProperty Name)}}
+        
+        $Count++
+    }
+}
+#*************************
+# EndFunction Get-HostList2
+#*************************
+
+
+
+#*******************************
+# Function Gather-AdditionalInfo
+#*******************************
+Function Gather-AdditionalInfo {
+    [CmdletBinding()]
+    Param()
+    "Gathering additional Host Info"
+#    $Global:HostList = Import-Csv $Global:Folder\$Global:VCname-HostList.csv 
+    $Count = 1
+    $Global:HostList |
+    ForEach-Object{
+        Write-Progress -Id 0 -Activity 'Gathering Annotations' -Status "Processing $($count) of $($Global:HostList.count)" -CurrentOperation $_.Name -PercentComplete (($count/$Global:HostList.count) * 100)
+        $vmHostAnnotations = Get-Annotation -Entity $_.Name
+        $TableCount = $vmHostAnnotations.count
+        $RowCount = 0
+        While ($RowCount -ne $TableCount){
+            $_ | Add-Member -MemberType NoteProperty -Name $vmHostAnnotations[$RowCount].name -Value $vmHostAnnotations[$RowCount].Value
+            $RowCount++
+            }
+        $Count++
+        }
+    
+}
+#**********************************
+# EndFunction Gather-AdditionalInfo
+#**********************************
+
 
 #**********************
 # Function Write-to-CSV
@@ -180,12 +248,21 @@ Function Convert-To-Excel {
         $query.Refresh()
         $query.Delete()
 
+        ### Get Size of Worksheet
+        $objRange = $worksheet.UsedRange.Cells 
+        $xRow = $objRange.SpecialCells(11).ow
+        $xCol = $objRange.SpecialCells(11).column
+
+        ### Format First Row
+        $RangeToFormat = $worksheet.Range("1:1")
+        $RangeToFormat.Style = 'Accent1'
+
         ### Save & close the Workbook as XLSX. Change the output extension for Excel 2003
         $Workbook.SaveAs($outputXLSX,51)
         $excel.Quit()
     }
     ## To exclude an item, use the '-exclude' parameter (wildcards if needed)
-    remove-item -path $workingdir 
+  #  remove-item -path $workingdir 
 
 }
 #*****************************
@@ -198,22 +275,24 @@ Function Convert-To-Excel {
 CLS
 $ErrorActionPreference="SilentlyContinue"
 
-"================================================="
+"=========================================================="
 " "
 Write-Host "Get CIHS credentials" -ForegroundColor Yellow
 $Global:Creds = Get-Credential -Credential $null
 
 Get-VCenter
 Connect-VC
-"-------------------------------------------------"
+"----------------------------------------------------------"
 Verify-Folders
-"-------------------------------------------------"
-Get-HostList
-"-------------------------------------------------"
+"----------------------------------------------------------"
+Get-HostList2
+"----------------------------------------------------------"
+Gather-AdditionalInfo
+"----------------------------------------------------------"
 Write-to-CSV
-"-------------------------------------------------"
+"----------------------------------------------------------"
 Convert-To-Excel
-"-------------------------------------------------"
+"----------------------------------------------------------"
 Disconnect-VC
 "Open Explorer to $Global:Folder"
 Invoke-Item $Global:Folder
