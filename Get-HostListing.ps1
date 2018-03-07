@@ -109,87 +109,45 @@ Function Clean-Up {
 Function Get-HostList {
     [CmdletBinding()]
     Param()
-    "Retrieving HostList from $Global:VCname"
-    #$Global:HostList = Get-VMhost | where {$_.ConnectionState -eq "Connected"} | Get-VMHostHardware | Select VMHost, Manufacturer, Model, SerialNumber
-    $Global:HostList = Get-View -ViewType Hostsystem | Select `
-        Name, `
-        @{N="State";E={$_.RunTime.ConnectionState}}, `
-        @{N="Vendor";E={$_.Hardware.systemInfo.Vendor}}, `
-        @{N="Model";e={$_.Hardware.SystemInfo.Model}}, `
-        @{Name="Serial#"; E={($_.Hardware.SystemInfo.OtherIdentifyingInfo | Where {$_.IdentifierType.Key -eq "ServiceTag"}).IdentifierValue}}, `
-        @{N="Product";E={$_.Config.Product.Name}}, `
-        @{N="Version";E={$_.Config.Product.Version}}, `
-        @{N="Build";E={$_.Config.Product.Build}}, `
-        @{N="ManagementIP";E={($_.Config.Network.VNic.Spec | Where {$_.PortGroup -eq "Management Network"}).IP.IPAddress}}, `
-        @{N="Cluster";E={($_.parent | Get-VIObjectByVIView | Select -ExpandProperty Name)}}
-
-
-}
-#*************************
-# EndFunction Get-HostList
-#*************************
-
-#**********************
-# Function Get-HostList2
-#**********************
-Function Get-HostList2 {
-    [CmdletBinding()]
-    Param()
-    "Retrieving HostList from $Global:VCname"
+    "Generating Host View from $Global:VCname"
     "This may take a few minutes"
     $Count = 1
-    $Global:MasterList = Get-View -ViewType HostSystem 
-    
-    $Global:Masterlist |
-    ForEach-Object {
-        Write-Progress -Id 0 -Activity 'Generating Hostlist' -Status "Processing $($count) of $($Global:MasterList.count)" -CurrentOperation $_.Name -PercentComplete (($count/$Global:MasterList.count) * 100)
-        $Global:HostList += $_ | Select `
-            Name, `
-            @{N="State";E={$_.RunTime.ConnectionState}}, `
-            @{N="Vendor";E={$_.Hardware.systemInfo.Vendor}}, `
-            @{N="Model";e={$_.Hardware.SystemInfo.Model}}, `
-            @{Name="Serial#"; E={($_.Hardware.SystemInfo.OtherIdentifyingInfo | Where {$_.IdentifierType.Key -eq "ServiceTag"}).IdentifierValue}}, `
-            @{N="Product";E={$_.Config.Product.Name}}, `
-            @{N="Version";E={$_.Config.Product.Version}}, `
-            @{N="Build";E={$_.Config.Product.Build}}, `
-            @{N="ManagementIP";E={($_.Config.Network.VNic.Spec | Where {$_.PortGroup -eq "Management Network"}).IP.IPAddress}}, `
-            @{N="Cluster";E={($_.parent | Get-VIObjectByVIView | Select -ExpandProperty Name)}}
-        
+    #$Global:MasterList = Get-View -ViewType HostSystem -Filter @{"Name" = "itspaublesx101.cihs.gov.on.ca"}
+    $Global:MasterList = Get-View -ViewType HostSystem
+    ForEach ($vmview in $Global:MasterList){
+        Write-Progress -Id 0 -Activity 'Generating Host Details from Host View' -Status "Processing $($count) of $($Global:MasterList.count)" -CurrentOperation $_.Name -PercentComplete (($count/$Global:MasterList.count) * 100)
+        $vmhost=New-Object PsObject
+        $vmhost | Add-Member -MemberType NoteProperty -Name Name -Value $vmview.Name
+        $vmhost | Add-Member -MemberType NoteProperty -Name State -Value $vmview.Runtime.ConnectionState
+        $vmhost | Add-Member -MemberType NoteProperty -Name Vendor -Value $vmview.Hardware.systemInfo.Vendor
+        $vmhost | Add-Member -MemberType NoteProperty -Name Model -Value $vmview.Hardware.systemInfo.Model
+        $vmhost | Add-Member -MemberType NoteProperty -Name Serial# -Value ($vmview.Hardware.SystemInfo.OtherIdentifyingInfo | Where {$_.IdentifierType.Key -eq "ServiceTag"}).IdentifierValue
+        $vmhost | Add-Member -MemberType NoteProperty -Name Product -Value $vmview.Config.Product.Name
+        $vmhost | Add-Member -MemberType NoteProperty -Name Version -Value $vmview.Config.Product.Version
+        $vmhost | Add-Member -MemberType NoteProperty -Name Build -Value $vmview.Config.Product.Build
+        $vmhost | Add-Member -MemberType NoteProperty -Name ManagementIP -Value ($vmview.Config.Network.VNic.Spec | Where {$_.PortGroup -eq "Management Network"}).IP.IPAddress
+        $vmhost | Add-Member -MemberType NoteProperty -Name Cluster -Value ($vmview.parent | Get-VIObjectByVIView | Select -ExpandProperty Name)
+        #Clean out extra data from ( if it exists as it will not resolve parent with it
+        $vmClusterName = $vmview.parent | Get-VIObjectByVIView | Select -ExpandProperty Name
+        $vmClusterName = $vmClusterName.split('(')[0]
+        #Get Host Cluster Parent folder
+        $vmCluster = get-view -ViewType ClusterComputeResource -filter @{"Name" = ($vmClusterName)} 
+        #$vmCluster = get-view -ViewType ClusterComputeResource -filter @{"Name" = ($vmview.parent | Get-VIObjectByVIView | Select -ExpandProperty Name)}
+        $vmhost | Add-Member -MemberType NoteProperty -Name Folder -Value($vmCluster.parent[0] | Get-VIObjectByVIView | Select -ExpandProperty Name) 
+        $vmCluster = $null
+        #Get the DataCenter Name
+        $vmhost | Add-Member -MemberType NoteProperty -Name DataCenter -Value (Get-Datacenter -VMHost $vmview.name | Select -ExpandProperty Name)
+        ForEach ($CustomAttribute in $vmview.AvailableField){
+            $vmhost | Add-Member -MemberType NoteProperty -Name $CustomAttribute.Name -Value ($vmview.Summary.CustomValue | ? {$_.Key -eq $CustomAttribute.Key}).value
+        }
+        #Add record to HostList       
+        $Global:HostList += $vmhost
         $Count++
     }
 }
 #*************************
-# EndFunction Get-HostList2
+# EndFunction Get-HostList
 #*************************
-
-
-
-#*******************************
-# Function Gather-AdditionalInfo
-#*******************************
-Function Gather-AdditionalInfo {
-    [CmdletBinding()]
-    Param()
-    "Gathering additional Host Info"
-#    $Global:HostList = Import-Csv $Global:Folder\$Global:VCname-HostList.csv 
-    $Count = 1
-    $Global:HostList |
-    ForEach-Object{
-        Write-Progress -Id 0 -Activity 'Gathering Annotations' -Status "Processing $($count) of $($Global:HostList.count)" -CurrentOperation $_.Name -PercentComplete (($count/$Global:HostList.count) * 100)
-        $vmHostAnnotations = Get-Annotation -Entity $_.Name
-        $TableCount = $vmHostAnnotations.count
-        $RowCount = 0
-        While ($RowCount -ne $TableCount){
-            $_ | Add-Member -MemberType NoteProperty -Name $vmHostAnnotations[$RowCount].name -Value $vmHostAnnotations[$RowCount].Value
-            $RowCount++
-            }
-        $Count++
-        }
-    
-}
-#**********************************
-# EndFunction Gather-AdditionalInfo
-#**********************************
 
 
 #**********************
@@ -262,7 +220,7 @@ Function Convert-To-Excel {
         $excel.Quit()
     }
     ## To exclude an item, use the '-exclude' parameter (wildcards if needed)
-  #  remove-item -path $workingdir 
+    remove-item -path $workingdir 
 
 }
 #*****************************
@@ -285,9 +243,7 @@ Connect-VC
 "----------------------------------------------------------"
 Verify-Folders
 "----------------------------------------------------------"
-Get-HostList2
-"----------------------------------------------------------"
-Gather-AdditionalInfo
+Get-HostList
 "----------------------------------------------------------"
 Write-to-CSV
 "----------------------------------------------------------"
