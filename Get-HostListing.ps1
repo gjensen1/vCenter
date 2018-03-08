@@ -130,11 +130,17 @@ Function Get-HostList {
         #Clean out extra data from ( if it exists as it will not resolve parent with it
         $vmClusterName = $vmview.parent | Get-VIObjectByVIView | Select -ExpandProperty Name
         $vmClusterName = $vmClusterName.split('(')[0]
-        #Get Host Cluster Parent folder
+        #Get Host Cluster Parent folder If Host is returned assume no Folder and blank the return value
         $vmCluster = get-view -ViewType ClusterComputeResource -filter @{"Name" = ($vmClusterName)} 
-        #$vmCluster = get-view -ViewType ClusterComputeResource -filter @{"Name" = ($vmview.parent | Get-VIObjectByVIView | Select -ExpandProperty Name)}
-        $vmhost | Add-Member -MemberType NoteProperty -Name Folder -Value($vmCluster.parent[0] | Get-VIObjectByVIView | Select -ExpandProperty Name) 
+        $hostFolder = $vmCluster.parent[0] | Get-VIObjectByVIView | Select -ExpandProperty Name
+        if ($hostFolder -eq "host"){
+            $vmhost | Add-Member -MemberType NoteProperty -Name Folder -Value ""
+            } Else {
+                $vmhost | Add-Member -MemberType NoteProperty -Name Folder -Value $hostFolder
+        }
+        #Null out Folder related variables for next loop throw
         $vmCluster = $null
+        $hostFoler = $null
         #Get the DataCenter Name
         $vmhost | Add-Member -MemberType NoteProperty -Name DataCenter -Value (Get-Datacenter -VMHost $vmview.name | Select -ExpandProperty Name)
         ForEach ($CustomAttribute in $vmview.AvailableField){
