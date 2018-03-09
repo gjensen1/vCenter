@@ -122,6 +122,8 @@ Function Get-HostList {
         $vmhost | Add-Member -MemberType NoteProperty -Name Vendor -Value $vmview.Hardware.systemInfo.Vendor
         $vmhost | Add-Member -MemberType NoteProperty -Name Model -Value $vmview.Hardware.systemInfo.Model
         $vmhost | Add-Member -MemberType NoteProperty -Name Serial# -Value ($vmview.Hardware.SystemInfo.OtherIdentifyingInfo | Where {$_.IdentifierType.Key -eq "ServiceTag"}).IdentifierValue
+        $vmhost | Add-Member -MemberType NoteProperty -Name BiosVersion -Value $vmview.Hardware.BiosInfo.BiosVersion
+        $vmhost | Add-Member -MemberType NoteProperty -Name BiosReleaseDate -Value $vmview.Hardware.BiosInfo.ReleaseDate
         $vmhost | Add-Member -MemberType NoteProperty -Name Product -Value $vmview.Config.Product.Name
         $vmhost | Add-Member -MemberType NoteProperty -Name Version -Value $vmview.Config.Product.Version
         $vmhost | Add-Member -MemberType NoteProperty -Name Build -Value $vmview.Config.Product.Build
