@@ -1,4 +1,45 @@
-﻿# +------------------------------------------------------+
+﻿<# 
+*******************************************************************************************************************
+Authored Date:    March 2018
+Original Author:  Graham Jensen
+*******************************************************************************************************************
+.SYNOPSIS
+    Get Host listing from a vCenter
+
+.DESCRIPTION
+   Generates an Excel Worksheet with all the Hosts Managed by a particular vCenter.  Includes the gathering 
+   of Annotations, and gathers available information from the hosts, such as Manufacture, Model, Serial #, 
+   BIOS info, ESXi Version and other into.
+
+   Prompted inputs:  Credentials, vCenterName
+
+   Outputs:          
+            $USERPROFILE$\Documents\vCenterHostListings\$VMHost-HostList.xlsx
+
+*******************************************************************************************************************  
+.NOTES
+Prerequisites:
+
+    #1  This script uses the VMware modules installed by the installation of VMware PowerCLI
+        ENSURE that VMware PowerCLI has been installed.  
+    
+        Installation media can be found here: 
+        \\cihs.ad.gov.on.ca\tbs\Groups\ITS\DCO\RHS\RHS\Software\VMware
+
+
+===================================================================================================================
+Update Log:   Please use this section to document changes made to this script
+===================================================================================================================
+-----------------------------------------------------------------------------
+Update <Date>
+   Author:    <Name>
+   Description of Change:
+      <Description>
+-----------------------------------------------------------------------------
+*******************************************************************************************************************
+#>
+
+# +------------------------------------------------------+
 # |        Load VMware modules if not loaded             |
 # +------------------------------------------------------+
 "Loading VMWare Modules"
